@@ -8,8 +8,9 @@ A Next.js application demonstrating infinite scroll functionality using The Movi
 - **Movie Cards**: Displays popular movies with posters, titles, descriptions, and ratings
 - **Loading States**: Shows skeleton loading cards while fetching data
 - **Error Handling**: Graceful error handling with user-friendly messages
-- **Responsive Design**: Mobile-first responsive grid layout
+- **Responsive Design**: Mobile-first responsive grid layout (1–4 columns)
 - **Debounced Scrolling**: Optimized scroll event handling to prevent excessive API calls
+- **Virtualization**: Renders only visible rows for improved performance with large lists
 
 ## Tech Stack
 
@@ -18,18 +19,23 @@ A Next.js application demonstrating infinite scroll functionality using The Movi
 - **Tailwind CSS** - Styling and responsive design
 - **Axios** - HTTP client for API requests
 - **Lodash** - Utility functions (debounce)
+- **react-window** - Virtualized list rendering
 - **TMDB API** - The Movie Database API for movie data
 
 ## Project Structure
 
 ```
 src/app/
-├── page.tsx                    # Main page with infinite scroll logic
-├── layout.tsx                  # Root layout
-├── globals.css                 # Global styles
+├── page.tsx                        # Home page with links to demos
+├── layout.tsx                      # Root layout
+├── globals.css                     # Global styles
+├── basic-infinite-scroll/
+│   └── page.tsx                    # Basic infinite scroll implementation
+├── with-virtualization/
+│   └── page.tsx                    # Virtualized infinite scroll implementation
 └── components/
-    ├── MovieCard.tsx           # Individual movie card component
-    └── MovieCardSkeleton.tsx   # Loading skeleton component
+    ├── MovieCard.tsx               # Individual movie card component
+    └── MovieCardSkeleton.tsx       # Loading skeleton component
 ```
 
 ## Setup
@@ -65,15 +71,17 @@ src/app/
 
    Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## How It Works
+## Implementations
 
-### Infinite Scroll Implementation
+### 1. Basic Infinite Scroll (`/basic-infinite-scroll`)
 
-The infinite scroll functionality is implemented in `src/app/page.tsx`:
+The classic approach: renders all loaded items into the DOM and listens to the window scroll event.
+
+**How it works:**
 
 1. **State Management**: Uses React hooks to manage:
    - `page`: Current page number for API pagination
-   - `data`: Array of movie data
+   - `data`: Array of all loaded movie data
    - `loading`: Loading state indicator
    - `error`: Error state handling
 
@@ -105,7 +113,48 @@ The infinite scroll functionality is implemented in `src/app/page.tsx`:
    }, [page]);
    ```
 
-### Components
+**Trade-off**: As more pages are loaded, all movie cards remain mounted in the DOM, which can degrade performance over time.
+
+---
+
+### 2. With Virtualization (`/with-virtualization`)
+
+Uses `react-window` to render only the rows currently visible in the viewport, keeping DOM node count constant regardless of how many movies have been loaded.
+
+**How it works:**
+
+1. **Responsive Grid Rows**: Movies are grouped into rows based on the current column count (responsive breakpoints matching Tailwind's `sm`/`lg`/`xl`). Each row is a `MovieRow` component rendered inside the virtualized `List`.
+
+2. **Dynamic Row Heights**: Uses `useDynamicRowHeight` to measure actual rendered row heights (since movie cards can vary). The `key: columnCount` prop resets measurements when the column layout changes.
+
+   ```typescript
+   const rowHeight = useDynamicRowHeight({
+     defaultRowHeight: 420,
+     key: columnCount,
+   });
+   ```
+
+3. **Infinite Scroll via `onRowsRendered`**: Instead of listening to window scroll events, the `onRowsRendered` callback fires whenever the visible row range changes. When the last visible row is within 2 rows of the total row count, the next page is fetched.
+
+   ```typescript
+   const handleRowsRendered = useCallback(
+     (visibleRows: { startIndex: number; stopIndex: number }) => {
+       if (!hasMore || loading) return;
+       if (visibleRows.stopIndex >= rowCount - 2) {
+         setPage((prev) => prev + 1);
+       }
+     },
+     [hasMore, loading, rowCount]
+   );
+   ```
+
+4. **Duplicate Fetch Prevention**: An `isFetchingRef` ref guard prevents concurrent fetches when state updates trigger multiple renders.
+
+**Trade-off**: Only visible rows are mounted in the DOM at any time, making this approach much more performant for large datasets.
+
+---
+
+## Components
 
 - **MovieCard**: Displays movie information with poster, title, description, and rating
 - **MovieCardSkeleton**: Loading placeholder with animated skeleton effect
@@ -138,12 +187,13 @@ Authentication via Bearer token in request headers.
 
 This project demonstrates key concepts:
 
-- React hooks (useState, useEffect)
+- React hooks (useState, useEffect, useCallback, useRef)
 - Event handling and cleanup
 - API integration with error handling
-- Performance optimization (debouncing)
+- Performance optimization (debouncing, virtualization)
 - Responsive design patterns
 - TypeScript in React applications
+- List virtualization with react-window
 
 ## License
 
